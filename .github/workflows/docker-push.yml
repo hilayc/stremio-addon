@@ -1,1 +1,72 @@
+name: Build, Push to GHCR, and Release
 
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*' # Triggers the release when a tag like v1.0.0 is pushed
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-push-and-release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Changed to 'write' to allow creating GitHub Releases
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # --- NEW STEPS BELOW ---
+
+      - name: Export Docker image as a .tar archive
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # The metadata action exposes the resolved version (e.g. 1.0.0 for tag v1.0.0)
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}"
+          
+          # Pull the image we just pushed
+          docker pull $IMAGE_TAG
+          
+          # Save it as a tarball. (Optional: pipe to gzip to make a .tar.gz to save space)
+          docker save $IMAGE_TAG > docker-image.tar
+
+      - name: Create GitHub Release and Upload Release Asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: docker-image.tar
+          generate_release_notes: true # Auto-generates changelog based on PRs
