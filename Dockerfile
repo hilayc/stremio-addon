@@ -3,7 +3,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && mkdir /data
-COPY addon ./addon
+COPY stremio_addon ./addon
 COPY generate_session.py .
 VOLUME /data
 EXPOSE 8000
