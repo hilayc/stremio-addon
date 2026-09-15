@@ -62,6 +62,9 @@ proxy to `addon:8000`. The included Compose mapping uses lowercase `port`.
 | `data_dir` | Optional data directory; default `/data` |
 
 The app accepts uppercase equivalents, with lowercase taking precedence.
+Under Home Assistant, these settings are also read directly from
+`/data/options.json`, and persistent application data defaults to
+`/data/stremio`.
 Only correctly spelled variables are used. The named volume preserves the index
 and cache. One process/worker owns the client and database. Do not scale replicas
 against the same data directory. The image runs as UID 10001; bind mounts need

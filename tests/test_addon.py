@@ -56,6 +56,45 @@ def test_tokens():
             t.verify(value, scope)
 
 
+def test_home_assistant_options_fallback(tmp_path, monkeypatch):
+    import addon.core as core
+    options = tmp_path / 'options.json'
+    options.write_text('''{
+      "port": 9123,
+      "addon_url": "https://telegram.example.com",
+      "api_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "api_id": 12345,
+      "api_hash": "hash",
+      "user_session_string": "session",
+      "cache_mb": 42
+    }''')
+    real_path = core.Path
+    monkeypatch.setattr(core, 'Path', lambda value: options if value == '/data/options.json' else real_path(value))
+    for name in ('port', 'addon_url', 'api_key', 'api_id', 'api_hash', 'user_session_string', 'cache_mb',
+                 'PORT', 'ADDON_URL', 'API_KEY', 'API_ID', 'API_HASH', 'USER_SESSION_STRING', 'CACHE_MB'):
+        monkeypatch.delenv(name, raising=False)
+    settings = core.Settings.env()
+    assert settings.port == 9123
+    assert settings.url == 'https://telegram.example.com'
+    assert settings.api_id == 12345
+    assert settings.cache_bytes == 42 * 1024**2
+    assert settings.data == real_path('/data/stremio')
+
+
+def test_environment_overrides_home_assistant_options(tmp_path, monkeypatch):
+    import addon.core as core
+    options = tmp_path / 'options.json'
+    options.write_text('{"addon_url":"https://ha.example.com"}')
+    real_path = core.Path
+    monkeypatch.setattr(core, 'Path', lambda value: options if value == '/data/options.json' else real_path(value))
+    monkeypatch.setenv('addon_url', 'https://environment.example.com')
+    monkeypatch.setenv('api_key', 'a' * 32)
+    monkeypatch.setenv('api_id', '123')
+    monkeypatch.setenv('api_hash', 'hash')
+    monkeypatch.setenv('user_session_string', 'session')
+    assert core.Settings.env().url == 'https://environment.example.com'
+
+
 class FakeTelegram:
     def __init__(self, cfg, store):
         self.store = store

@@ -56,10 +56,12 @@ Set these options in the add-on's Configuration tab:
 | `user_session_string` | Complete Telethon StringSession |
 | `cache_mb` | Optional cache limit in MiB, default `512` |
 
-All six requested environment variables are exported with their exact lowercase
-names. Home Assistant options take precedence over environment values. When
-running this image outside HA without `/data/options.json`, the program's
-normal lowercase/uppercase environment variables still work.
+All six requested settings use their exact lowercase names. The application
+reads them directly from Home Assistant's `/data/options.json`; the HA startup
+wrapper also exports them as environment variables. This makes both the generic
+repository image and the HA-specific image work under Supervisor. Explicit
+lowercase/uppercase environment variables take precedence when running the image
+outside Home Assistant.
 
 Generate the session on a trusted machine using the repository's
 `generate_session.py`. A Pyrogram/GramJS session or a `.session` filename is not

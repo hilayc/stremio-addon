@@ -46,11 +46,33 @@ class Settings:
 
     @classmethod
     def env(cls):
+        options = {}
+        options_path = Path('/data/options.json')
+        if options_path.is_file():
+            try:
+                options = json.loads(options_path.read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    'Cannot read Home Assistant options from /data/options.json'
+                ) from exc
+            if not isinstance(options, dict):
+                raise ValueError(
+                    'Home Assistant options in /data/options.json must be a JSON object'
+                )
+
         def get(name, default=None):
-            value = os.getenv(name, os.getenv(name.upper(), default))
+            # Normal container environment values take precedence. Home Assistant
+            # stores add-on configuration in /data/options.json, so use it as a
+            # direct fallback even when the generic image is pulled by Supervisor.
+            value = os.getenv(name)
+            if value is None or not str(value).strip():
+                value = os.getenv(name.upper())
+            if value is None or not str(value).strip():
+                value = options.get(name, default)
             if value is None or not str(value).strip():
                 raise ValueError(f'Missing environment variable: {name}')
-            return value
+            return str(value)
+
         url = get('addon_url').rstrip('/')
         parsed = urlparse(url)
         if parsed.scheme not in ('http', 'https') or not parsed.netloc or parsed.query or parsed.fragment or parsed.username:
@@ -58,7 +80,8 @@ class Settings:
         key = get('api_key')
         if not re.fullmatch(r'[A-Za-z0-9_-]{32,}', key):
             raise ValueError('api_key needs at least 32 URL-safe letters, digits, underscores or hyphens')
-        return cls(int(get('port', '8000')), url, key, int(get('api_id')), get('api_hash'), get('user_session_string'), Path(get('data_dir', '/data')), int(get('cache_mb', '512')) * 1024**2)
+        default_data = '/data/stremio' if options_path.is_file() else '/data'
+        return cls(int(get('port', '8000')), url, key, int(get('api_id')), get('api_hash'), get('user_session_string'), Path(get('data_dir', default_data)), int(get('cache_mb', '512')) * 1024**2)
 
 
 class Tokens:

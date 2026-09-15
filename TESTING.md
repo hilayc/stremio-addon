@@ -1,6 +1,6 @@
 # Validation
 
-Automated result: **20 passed** on Python 3.12. The only warning was a
+Automated result: **22 passed** on Python 3.12. The only warning was a
 third-party Starlette/AnyIO deprecation. Docker and live Telegram/Stremio
 acceptance were not run in this environment.
 
