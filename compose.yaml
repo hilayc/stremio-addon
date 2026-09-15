@@ -1,0 +1,15 @@
+services:
+  addon:
+    build: .
+    env_file: .env
+    ports:
+      - "127.0.0.1:${port:-8000}:${port:-8000}"
+    volumes:
+      - telegram-data:/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  telegram-data:
