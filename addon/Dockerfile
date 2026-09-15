@@ -19,9 +19,9 @@ RUN apk add --no-cache python3 py3-pip \
     && python3 -m venv /opt/venv
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
-COPY addon /app/addon
+COPY stremio_addon /app/addon
 COPY generate_session.py /app/generate_session.py
-COPY homeassistant-addon/start.py /app/ha_start.py
+COPY addon/start.py /app/ha_start.py
 
 # Retain the HA base image's /init entrypoint (s6); it runs this command.
 CMD ["python", "/app/ha_start.py"]

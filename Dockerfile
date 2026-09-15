@@ -1,4 +1,12 @@
 FROM python:3.12-slim
+ARG BUILD_VERSION=main
+ARG BUILD_ARCH=amd64
+LABEL io.hass.name="Stremio Telegram" \
+      io.hass.description="Private Telegram video sources for Stremio" \
+      io.hass.type="addon" \
+      io.hass.version="${BUILD_VERSION}" \
+      io.hass.arch="${BUILD_ARCH}" \
+      org.opencontainers.image.source="https://github.com/hilayc/stremio-addon"
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY requirements.txt .
@@ -7,5 +15,6 @@ COPY stremio_addon ./addon
 COPY generate_session.py .
 VOLUME /data
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('port',os.getenv('PORT','8000'))+'/healthz')"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["python", "-m", "addon.healthcheck"]
 CMD ["python", "-m", "addon"]

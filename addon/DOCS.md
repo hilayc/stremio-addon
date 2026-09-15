@@ -15,7 +15,7 @@ From the **repository root**, run:
 ```sh
 docker build --platform linux/amd64 \
   --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.24 \
-  -f homeassistant-addon/Dockerfile \
+  -f addon/Dockerfile \
   -t ghcr.io/hilayc/stremio-addon:main .
 docker push ghcr.io/hilayc/stremio-addon:main
 ```
@@ -23,7 +23,7 @@ docker push ghcr.io/hilayc/stremio-addon:main
 The final dot is important: the Dockerfile copies the existing `addon/`,
 `requirements.txt`, and `generate_session.py` from the repository root.
 Build automation must use `context: .` and
-`file: homeassistant-addon/Dockerfile`. It must build this HA-specific image,
+`file: addon/Dockerfile`. It must build this HA-specific image,
 not the repository's original standalone Dockerfile, for the `main` tag.
 
 Make the GHCR package public so Supervisor can pull it. Publishing is a separate
@@ -37,7 +37,7 @@ After pushing these files to the repository and publishing the image, add
 `https://github.com/hilayc/stremio-addon` in Home Assistant's add-on store
 repository menu. Install **Stremio Telegram** on an amd64 installation.
 
-Alternatively, copy this entire folder to `/addons/homeassistant-addon` on
+Alternatively, copy this entire folder to `/addons/stremio-telegram` on
 Home Assistant, reload the add-on store, and install the local entry. It still
 pulls the published image. Local Supervisor source builds are not supported by
 this folder alone: source builds require the repository-root context above.

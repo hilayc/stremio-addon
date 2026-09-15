@@ -2,10 +2,10 @@ from types import SimpleNamespace
 from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
-from addon.core import Settings, Store, Tokens, byte_range, normalize, parse_title
-from addon.app import create_app
-from addon.metadata import Metadata
-from addon.telegram import Telegram, CHUNK
+from stremio_addon.core import Settings, Store, Tokens, byte_range, normalize, parse_title
+from stremio_addon.app import create_app
+from stremio_addon.metadata import Metadata
+from stremio_addon.telegram import Telegram, CHUNK
 
 
 def row(**updates):
@@ -57,7 +57,7 @@ def test_tokens():
 
 
 def test_home_assistant_options_fallback(tmp_path, monkeypatch):
-    import addon.core as core
+    import stremio_addon.core as core
     options = tmp_path / 'options.json'
     options.write_text('''{
       "port": 9123,
@@ -82,7 +82,7 @@ def test_home_assistant_options_fallback(tmp_path, monkeypatch):
 
 
 def test_environment_overrides_home_assistant_options(tmp_path, monkeypatch):
-    import addon.core as core
+    import stremio_addon.core as core
     options = tmp_path / 'options.json'
     options.write_text('{"addon_url":"https://ha.example.com"}')
     real_path = core.Path
