@@ -1,0 +1,29 @@
+name: Stremio Telegram
+version: main
+slug: stremio_telegram
+description: Private Telegram video sources for Stremio with Hebrew search
+url: https://github.com/hilayc/stremio-addon
+image: ghcr.io/hilayc/stremio-addon
+arch:
+  - amd64
+startup: application
+boot: auto
+init: false
+host_network: true
+timeout: 30
+options:
+  port: 8000
+  addon_url: ""
+  api_key: ""
+  api_id: 0
+  api_hash: ""
+  user_session_string: ""
+  cache_mb: 512
+schema:
+  port: port
+  addon_url: url
+  api_key: password
+  api_id: int(1,)
+  api_hash: password
+  user_session_string: password
+  cache_mb: int(0,)
