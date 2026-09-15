@@ -86,4 +86,8 @@ The protected `/<api_key>/status` endpoint shows Telegram indexing progress.
 SQLite and video chunks persist under `/data/stremio`; Supervisor keeps options
 separately in `/data/options.json`. Restart the add-on after changing options.
 
+The published image must run as root inside Home Assistant so it can read the
+Supervisor-owned `/data/options.json` and write the add-on data directory. The
+repository's root Dockerfile therefore does not set `USER addon`.
+
 Reference: [Home Assistant add-on configuration](https://developers.home-assistant.io/docs/add-ons/configuration/).
