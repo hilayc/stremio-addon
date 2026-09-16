@@ -21,14 +21,23 @@ variable. Stremio's manifest reads that value, so a `v1.0.4` release also report
 Local runs and untagged builds report `0.0.0-dev` unless a valid semantic version
 is provided. For a manual build, pass `--build-arg BUILD_VERSION=1.0.4`.
 
-The automated config commit uses the workflow's `GITHUB_TOKEN` and includes
+After release creation, the updater reads that GitHub Release's notes and adds
+them under the unprefixed version heading in `addon/CHANGELOG.md` (creating the
+file if needed). The config and changelog changes land atomically in one commit.
+Older changelog entries and unrelated files are preserved. Re-running the release
+updates its existing entry instead of duplicating it, including when the config
+already has that version. An empty release body produces a version heading with
+no invented notes. This synchronization runs in the tag release workflow; editing
+release notes later requires re-running its publish job.
+
+The automated config/changelog commit uses the workflow's `GITHUB_TOKEN` and includes
 `[skip ci]`, so it does not trigger CI. Other configuration or code edits still
 receive normal CI. The release tag remains on its original commit.
 
 The updater preserves unrelated configuration, retries concurrent edits, and
 never downgrades the version advertised by Home Assistant. If the current
-version is equal or newer, it does nothing. Re-running the release is safe for
-the config update. Repository rules must permit the workflow token to update
+version is newer, it skips the older release. Re-running the release is safe for
+both files. Repository rules must permit the workflow token to update
 `main`; the workflow does not bypass branch protection.
 
 Tags such as `v1.1.0-rc.1` are supported and map to `1.1.0-rc.1`. Build metadata

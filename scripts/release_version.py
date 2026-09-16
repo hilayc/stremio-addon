@@ -1,4 +1,4 @@
-"""Validate release tags and advance the HA version without triggering CI."""
+"""Synchronize the HA version and release notes without triggering CI."""
 import argparse
 import base64
 import json
@@ -6,6 +6,7 @@ import os
 import re
 import time
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
@@ -52,27 +53,80 @@ def request(method, url, token, payload=None):
         return json.load(response)
 
 
+def update_changelog(content, version, notes):
+    start = f'<!-- release:{version}:start -->'
+    end = f'<!-- release:{version}:end -->'
+    entry = f'{start}\n## {version}\n\n{notes.strip()}\n{end}'
+    pattern = re.compile(re.escape(start) + r'.*?' + re.escape(end), re.S)
+    if pattern.search(content):
+        return pattern.sub(lambda _: entry, content, count=1)
+    if not content.strip():
+        return '# Changelog\n\n' + entry + '\n'
+    title = re.match(r'\A# [^\n]+\n(?:\s*\n)*', content)
+    if title:
+        return content[:title.end()] + entry + '\n\n' + content[title.end():]
+    return entry + '\n\n' + content
+
+
 def update_main(version, api_request=request, pause=time.sleep):
     token = os.environ['GITHUB_TOKEN']
     endpoint = (os.environ.get('GITHUB_API_URL', 'https://api.github.com')
-                + '/repos/' + os.environ['GITHUB_REPOSITORY'] + '/contents/addon/config.yaml')
-    for attempt in range(5):
-        original = api_request('GET', endpoint + '?ref=main', token)
-        content = base64.b64decode(original['content']).decode('utf-8')
-        updated = update_content(content, version)
-        if updated is None:
-            print('Home Assistant already advertises this version or a newer release; no update needed.')
-            return
+                + '/repos/' + os.environ['GITHUB_REPOSITORY'])
+    tag = 'v' + version
+    release = api_request('GET', endpoint + '/releases/tags/' + quote(tag, safe=''), token)
+    if release.get('draft') or release.get('tag_name') != tag:
+        raise ValueError('Expected a published GitHub Release for the requested tag')
+    notes = release.get('body') or ''
+
+    def read_file(path, head, optional=False):
         try:
-            api_request('PUT', endpoint, token, {
-                'message': f'chore: release Home Assistant add-on {version} [skip ci]',
-                'content': base64.b64encode(updated.encode()).decode(),
-                'sha': original['sha'], 'branch': 'main',
+            result = api_request('GET', endpoint + '/contents/' + path + '?ref=' + head, token)
+            return base64.b64decode(result['content']).decode('utf-8')
+        except HTTPError as exc:
+            if optional and exc.code == 404:
+                return ''
+            raise
+
+    for attempt in range(5):
+        head = api_request('GET', endpoint + '/git/ref/heads/main', token)['object']['sha']
+        commit = api_request('GET', endpoint + '/git/commits/' + head, token)
+        content = read_file('addon/config.yaml', head)
+        updated = update_content(content, version)
+        # Equal versions may still need the changelog (for example on a rerun).
+        if updated is None:
+            match = re.search(r'^version:([^\r\n]*)', content, re.M)
+            current = match[1].split('#', 1)[0].strip().strip('\"\'').removeprefix('v')
+            if version_key(current) > version_key(version):
+                print('Home Assistant already advertises a newer release; skipping older release.')
+                return
+        changelog = read_file('addon/CHANGELOG.md', head, optional=True)
+        new_changelog = update_changelog(changelog, version, notes)
+        entries = []
+        if updated is not None:
+            entries.append({'path': 'addon/config.yaml', 'mode': '100644', 'type': 'blob', 'content': updated})
+        if new_changelog != changelog:
+            entries.append({'path': 'addon/CHANGELOG.md', 'mode': '100644', 'type': 'blob', 'content': new_changelog})
+        if not entries:
+            print('Home Assistant version and release notes are already up to date.')
+            return
+        tree = api_request('POST', endpoint + '/git/trees', token,
+                           {'base_tree': commit['tree']['sha'], 'tree': entries})
+        new_commit = api_request('POST', endpoint + '/git/commits', token, {
+            'message': f'chore: release Home Assistant add-on {version} [skip ci]',
+            'tree': tree['sha'], 'parents': [head],
+        })
+        try:
+            api_request('PATCH', endpoint + '/git/refs/heads/main', token, {
+                'sha': new_commit['sha'], 'force': False,
             })
-            print(f'Updated addon/config.yaml on main to {version}.')
+            print(f'Updated Home Assistant version and changelog on main for {version}.')
             return
         except HTTPError as exc:
-            if exc.code != 409 or attempt == 4:
+            if exc.code not in (409, 422) or attempt == 4:
+                raise
+            latest = api_request('GET', endpoint + '/git/ref/heads/main', token)['object']['sha']
+            if latest == head:
+                # Validation/protection failures are not concurrency conflicts.
                 raise
             # Another release or user edit won the race. Re-read and compare
             # versions again rather than overwriting the latest configuration.

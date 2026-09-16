@@ -100,7 +100,7 @@ jobs:
         with:
           files: docker-image.tar
           generate_release_notes: true
-      - name: Update Home Assistant version on main without triggering CI
+      - name: Update Home Assistant version and changelog without triggering CI
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
