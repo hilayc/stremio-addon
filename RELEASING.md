@@ -15,6 +15,12 @@ Release `v1.0.4` with its image archive. It then updates only the top-level
 `version` in `addon/config.yaml` on `main` to `"1.0.4"`. The Docker build version
 label also uses `1.0.4`. No `main` or `latest` Docker tag is published.
 
+Both Dockerfiles persist `BUILD_VERSION` as the runtime `APP_VERSION` environment
+variable. Stremio's manifest reads that value, so a `v1.0.4` release also reports
+`"version": "1.0.4"` in the manifest. No manual Python version edit is needed.
+Local runs and untagged builds report `0.0.0-dev` unless a valid semantic version
+is provided. For a manual build, pass `--build-arg BUILD_VERSION=1.0.4`.
+
 The automated config commit uses the workflow's `GITHUB_TOKEN` and includes
 `[skip ci]`, so it does not trigger CI. Other configuration or code edits still
 receive normal CI. The release tag remains on its original commit.

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from .core import Settings, Store, Tokens, byte_range
 from .metadata import Metadata
 from .telegram import Telegram
+from .version import get_version
 
 interaction_log = logging.getLogger('uvicorn.error.interactions')
 interaction_log.setLevel(logging.INFO)
@@ -114,7 +115,7 @@ def create_app(settings=None, gateway_factory=Telegram):
     @app.get('/{key}/manifest.json')
     async def manifest(key):
         auth(key)
-        return {'id': 'community.private.telegram', 'version': '1.0.0', 'name': 'Private Telegram Videos',
+        return {'id': 'community.private.telegram', 'version': get_version(), 'name': 'Private Telegram Videos',
                 'description': 'Your private Telegram videos with Hebrew and English search.', 'types': ['movie', 'series'],
                 'resources': [{'name': 'catalog', 'types': ['movie']}, {'name': 'meta', 'types': ['movie'], 'idPrefixes': ['tg:']}, {'name': 'stream', 'types': ['movie', 'series'], 'idPrefixes': ['tg:', 'tt']}],
                 'catalogs': [{'type': 'movie', 'id': 'telegram', 'name': 'Telegram Videos', 'extra': [{'name': 'search', 'isRequired': False}, {'name': 'skip', 'isRequired': False}]}]}

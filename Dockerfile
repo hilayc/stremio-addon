@@ -8,6 +8,7 @@ LABEL io.hass.name="Stremio Telegram" \
       io.hass.arch="${BUILD_ARCH}" \
       org.opencontainers.image.source="https://github.com/hilayc/stremio-addon"
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+ENV APP_VERSION=${BUILD_VERSION}
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && mkdir /data

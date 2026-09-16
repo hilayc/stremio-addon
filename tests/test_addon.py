@@ -14,6 +14,25 @@ def row(**updates):
     return result
 
 
+@pytest.mark.parametrize('build_version,expected', [
+    ('1.1.0', '1.1.0'), ('v1.2.3', '1.2.3'),
+    ('1.2.0-rc.1', '1.2.0-rc.1'), ('2.0.0+build.1', '2.0.0+build.1'),
+    ('main', '0.0.0-dev'), (None, '0.0.0-dev'),
+    ('01.2.3', '0.0.0-dev'), ('1.2.3-01', '0.0.0-dev'),
+])
+def test_manifest_build_version(tmp_path, monkeypatch, build_version, expected):
+    if build_version is None:
+        monkeypatch.delenv('APP_VERSION', raising=False)
+    else:
+        monkeypatch.setenv('APP_VERSION', build_version)
+    key = 'a' * 32
+    cfg = Settings(8000, 'https://example.com', key, 1, 'hash', 'session', tmp_path)
+    with TestClient(create_app(cfg, FakeTelegram)) as client:
+        response = client.get(f'/{key}/manifest.json')
+        assert response.status_code == 200
+        assert response.json()['version'] == expected
+
+
 @pytest.mark.parametrize('value,expected', [(None,(0,9,200)),('bytes=2-5',(2,5,206)),('bytes=7-',(7,9,206)),('bytes=-3',(7,9,206)),('bytes=-99',(0,9,206)),('bytes=0-99',(0,9,206))])
 def test_ranges(value, expected):
     assert byte_range(value, 10) == expected

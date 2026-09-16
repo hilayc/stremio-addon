@@ -13,6 +13,7 @@ LABEL io.hass.name="Stremio Telegram" \
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    APP_VERSION=${BUILD_VERSION} \
     PATH="/opt/venv/bin:${PATH}"
 WORKDIR /app
 RUN apk add --no-cache python3 py3-pip \
