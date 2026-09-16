@@ -222,6 +222,65 @@ async def test_matching(tmp_path):
     store.db.close()
 
 
+def test_interaction_logs(tmp_path, caplog):
+    import json
+    key = 'a' * 32
+    cfg = Settings(8000, 'https://example.com', key, 1, 'private-hash', 'private-session', tmp_path)
+    app = create_app(cfg, FakeTelegram)
+    with TestClient(app) as client:
+        caplog.clear()
+        client.get(f'/{key}/catalog/movie/telegram/search={quote("שם")}.json')
+        client.get(f'/{key}/catalog/movie/telegram/search=missing.json')
+        client.get(f'/{key}/meta/movie/tg:-100123:7.json')
+        client.get(f'/{key}/stream/movie/tg:-100123:7.json')
+        async def no_matches(*args):
+            return []
+        app.state.metadata.match = no_matches
+        client.get(f'/{key}/stream/movie/tt1234567.json')
+        client.get(f'/{key}/catalog/movie/telegram/skip=-1.json')
+        secret_query = f'{key} private-session private-hash\nhttps://example.com/play/secret-token'
+        client.get(f'/{key}/catalog/movie/telegram/search={quote(secret_query, safe="")}.json')
+        def records():
+            return [r.getMessage() for r in caplog.records if r.name == 'uvicorn.error.interactions']
+        messages = records()
+        summaries = [json.loads(m) for m in messages]
+        assert summaries[0]['query'] == 'שם'
+        assert summaries[0]['result_count'] == 1
+        assert summaries[0]['sample_titles'] == ['שם הסרט']
+        assert summaries[1]['result_count'] == 0
+        assert summaries[2]['event'] == 'meta_lookup'
+        assert summaries[3]['event'] == 'stream_lookup'
+        assert summaries[3]['result_count'] == 1
+        assert summaries[4]['match_mode'] == 'metadata'
+        assert summaries[4]['result_count'] == 0
+        assert summaries[5]['status'] == 400
+        assert all(s['duration_ms'] >= 0 for s in summaries)
+        assert all('\n' not in m for m in messages)
+        for secret in (key, 'private-session', 'private-hash', 'secret-token'):
+            assert secret not in ''.join(messages)
+        count = len(messages)
+        client.get('/healthz')
+        client.get('/wrong/catalog/movie/telegram.json')
+        assert len(records()) == count
+
+
+def test_interaction_error_summary(tmp_path, caplog):
+    import json
+    key = 'a' * 32
+    app = create_app(Settings(8000, 'https://example.com', key, 1, 'hash', 'session', tmp_path), FakeTelegram)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        async def fail(*args):
+            raise RuntimeError('secret exception payload')
+        app.state.metadata.match = fail
+        response = client.get(f'/{key}/stream/movie/tt1234567.json')
+        assert response.status_code == 500
+        messages = [r.getMessage() for r in caplog.records if r.name == 'uvicorn.error.interactions']
+        summary = json.loads(messages[-1])
+        assert summary['status'] == 500
+        assert summary['error'] == 'RuntimeError'
+        assert 'secret exception payload' not in messages[-1]
+
+
 @pytest.mark.asyncio
 async def test_chunk_alignment_and_cache(tmp_path):
     cfg = Settings(8000, 'http://localhost', 'a'*32, 1, 'hash', '', tmp_path, CHUNK)

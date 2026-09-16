@@ -1,6 +1,10 @@
 import asyncio
 import hmac
+import json
+import logging
 import re
+import time
+import unicodedata
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qs
 from fastapi import FastAPI, HTTPException, Request
@@ -10,6 +14,19 @@ from pydantic import BaseModel
 from .core import Settings, Store, Tokens, byte_range
 from .metadata import Metadata
 from .telegram import Telegram
+
+interaction_log = logging.getLogger('uvicorn.error.interactions')
+interaction_log.setLevel(logging.INFO)
+
+
+def safe_log_text(value, cfg):
+    text = str(value)
+    for secret in (cfg.key, cfg.session, cfg.api_hash):
+        if secret:
+            text = text.replace(secret, '[redacted]')
+    text = re.sub(r'https?://\S+|/(?:play|thumb)/\S+', '[url]', text)
+    text = ''.join(' ' if unicodedata.category(c).startswith('C') else c for c in text)
+    return text[:200]
 
 
 def create_app(settings=None, gateway_factory=Telegram):
@@ -35,11 +52,40 @@ def create_app(settings=None, gateway_factory=Telegram):
 
     @app.middleware('http')
     async def private(request, call_next):
-        response = await call_next(request)
+        started = time.perf_counter()
+        status_code = 500
+        error = None
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+        except Exception as exc:
+            error = type(exc).__name__
+            raise
+        finally:
+            summary = getattr(request.state, 'interaction', None)
+            if summary is not None:
+                summary.update(status=status_code, duration_ms=round((time.perf_counter() - started) * 1000, 1))
+                if error:
+                    summary['error'] = error
+                interaction_log.log(logging.WARNING if status_code >= 400 else logging.INFO,
+                                    '%s', json.dumps(summary, ensure_ascii=False))
         response.headers['Cache-Control'] = 'private, no-store'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
+
+    def interaction(request, event, **fields):
+        request.state.interaction = dict(event=event, **{
+            name: safe_log_text(value, app.state.cfg) if isinstance(value, str) else value
+            for name, value in fields.items()
+        })
+
+    def results(request, rows):
+        request.state.interaction.update(
+            result_count=len(rows),
+            channel_count=len({r['channel'] for r in rows}),
+            sample_titles=[safe_log_text(r['title'], app.state.cfg) for r in rows[:3]],
+        )
 
     def auth(key):
         if not hmac.compare_digest(key.encode(), app.state.cfg.key.encode()):
@@ -75,28 +121,39 @@ def create_app(settings=None, gateway_factory=Telegram):
 
     @app.get('/{key}/catalog/{kind}/{catalog_id}.json')
     @app.get('/{key}/catalog/{kind}/{catalog_id}/{extras}.json')
-    async def catalog(key, kind, catalog_id, extras=''):
+    async def catalog(key, kind, catalog_id, request: Request, extras=''):
         auth(key)
+        args = parse_qs(extras)
+        query = args.get('search', [''])[0][:500]
+        interaction(request, 'catalog_search' if query else 'catalog_browse', query=query,
+                    type=kind, catalog=catalog_id, result_count=0)
         if kind != 'movie' or catalog_id != 'telegram':
             return {'metas': []}
-        args = parse_qs(extras)
         try:
             skip = int(args.get('skip', ['0'])[0])
             if skip < 0 or skip > 10_000_000:
                 raise ValueError()
         except ValueError:
             raise HTTPException(400, 'Invalid skip') from None
-        return {'metas': [meta(r) for r in app.state.store.catalog(args.get('search', [''])[0][:500], skip) if r['channel'] in app.state.tg.channels]}
+        request.state.interaction['skip'] = skip
+        rows = [r for r in app.state.store.catalog(query, skip) if r['channel'] in app.state.tg.channels]
+        results(request, rows)
+        return {'metas': [meta(r) for r in rows]}
 
     @app.get('/{key}/meta/{kind}/{item}.json')
-    async def detail(key, kind, item):
+    async def detail(key, kind, item, request: Request):
         auth(key)
+        interaction(request, 'meta_lookup', type=kind, item=item)
         row = app.state.store.get(item)
-        return {'meta': meta(row) if kind == 'movie' and row and row['channel'] in app.state.tg.channels else None}
+        rows = [row] if kind == 'movie' and row and row['channel'] in app.state.tg.channels else []
+        results(request, rows)
+        return {'meta': meta(row) if rows else None}
 
     @app.get('/{key}/stream/{kind}/{item}.json')
-    async def sources(key, kind, item):
+    async def sources(key, kind, item, request: Request):
         auth(key)
+        interaction(request, 'stream_lookup', type=kind, item=item,
+                    match_mode='telegram_id' if item.startswith('tg:') else 'metadata', result_count=0)
         if kind not in ('movie', 'series'):
             return {'streams': []}
         if item.startswith('tg:'):
@@ -104,6 +161,8 @@ def create_app(settings=None, gateway_factory=Telegram):
             rows = [row] if row and kind == 'movie' else []
         else:
             rows = await app.state.metadata.match(app.state.store, kind, item)
+        rows = [r for r in rows if r['channel'] in app.state.tg.channels]
+        results(request, rows)
         return {'streams': [{'name': 'Telegram ' + r['quality'], 'title': f"{r['title']}\n{r['channel_name']} · {r['size'] / 1024**3:.2f} GB", 'url': url(r, 'play'), 'behaviorHints': {'notWebReady': True}} for r in rows if r['channel'] in app.state.tg.channels]}
 
     @app.get('/{key}/status')
