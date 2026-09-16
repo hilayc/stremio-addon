@@ -43,6 +43,7 @@ class Settings:
     session: str
     data: Path
     cache_bytes: int = 512 * 1024 * 1024
+    channel_ids: frozenset[int] | None = None
 
     @classmethod
     def env(cls):
@@ -81,7 +82,20 @@ class Settings:
         if not re.fullmatch(r'[A-Za-z0-9_-]{32,}', key):
             raise ValueError('api_key needs at least 32 URL-safe letters, digits, underscores or hyphens')
         default_data = '/data/stremio' if options_path.is_file() else '/data'
-        return cls(int(get('port', '8000')), url, key, int(get('api_id')), get('api_hash'), get('user_session_string'), Path(get('data_dir', default_data)), int(get('cache_mb', '512')) * 1024**2)
+        raw_ids = os.getenv('CHANNEL_IDS')
+        if raw_ids is None:
+            raw_ids = os.getenv('channel_ids')
+        if raw_ids is None:
+            raw_ids = options.get('CHANNEL_IDS', options.get('channel_ids', ''))
+        channel_ids = None
+        if not isinstance(raw_ids, str):
+            raise ValueError('CHANNEL_IDS must be a comma-separated string of negative channel IDs')
+        if raw_ids.strip():
+            parts = [part.strip() for part in raw_ids.split(',')]
+            if any(not re.fullmatch(r'-[1-9][0-9]*', part) for part in parts):
+                raise ValueError('CHANNEL_IDS must contain only comma-separated negative channel IDs')
+            channel_ids = frozenset(int(part) for part in parts)
+        return cls(int(get('port', '8000')), url, key, int(get('api_id')), get('api_hash'), get('user_session_string'), Path(get('data_dir', default_data)), int(get('cache_mb', '512')) * 1024**2, channel_ids)
 
 
 class Tokens:

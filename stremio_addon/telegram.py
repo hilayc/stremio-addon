@@ -13,6 +13,7 @@ CHUNK = 512 * 1024
 class Telegram:
     def __init__(self, settings, store):
         self.store = store
+        self.channel_ids = settings.channel_ids
         self.client = TelegramClient(StringSession(settings.session), settings.api_id, settings.api_hash, flood_sleep_threshold=30)
         self.channels = {}
         self.status = {'phase': 'connecting', 'last_error': None}
@@ -51,11 +52,18 @@ class Telegram:
         async for dialog in self.client.iter_dialogs():
             entity = dialog.entity
             if isinstance(entity, types.Channel) and entity.broadcast and not entity.username and not getattr(entity, 'usernames', None) and not entity.left:
-                channels[utils.get_peer_id(entity)] = entity
+                channel_id = utils.get_peer_id(entity)
+                if self.channel_ids is None or channel_id in self.channel_ids:
+                    channels[channel_id] = entity
         self.channels = channels
         for row in self.store.db.execute('SELECT id,channel FROM videos').fetchall():
             if row['channel'] not in channels:
                 self.store.delete(row['id'])
+        # Removed entries must be rescanned if the channel is selected again.
+        with self.store.db:
+            for row in self.store.db.execute('SELECT channel FROM checkpoints').fetchall():
+                if row['channel'] not in channels:
+                    self.store.db.execute('DELETE FROM checkpoints WHERE channel=?', (row['channel'],))
 
     def index(self, channel, message):
         item = f'tg:{channel}:{message.id}'

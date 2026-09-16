@@ -6,7 +6,7 @@ from pathlib import Path
 
 FIELDS = (
     "port", "addon_url", "api_key", "api_id", "api_hash",
-    "user_session_string", "cache_mb",
+    "user_session_string", "cache_mb", "CHANNEL_IDS",
 )
 
 

@@ -19,6 +19,7 @@ options:
   api_hash: ""
   user_session_string: ""
   cache_mb: 512
+  CHANNEL_IDS: ""
 schema:
   port: port
   addon_url: url
@@ -27,3 +28,4 @@ schema:
   api_hash: password
   user_session_string: password
   cache_mb: int(0,)
+  CHANNEL_IDS: str?

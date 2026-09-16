@@ -55,6 +55,12 @@ Set these options in the add-on's Configuration tab:
 | `api_hash` | Telegram application hash |
 | `user_session_string` | Complete Telethon StringSession |
 | `cache_mb` | Optional cache limit in MiB, default `512` |
+| `CHANNEL_IDS` | Optional comma-separated negative channel IDs; blank scans all joined private channels |
+
+For example, set `CHANNEL_IDS: "-1001234567890,-1009876543210"` and restart
+the add-on. Only those joined private broadcast channels will be indexed.
+Existing catalog entries from excluded channels are removed on discovery;
+selecting them again restarts their history scan. Telegram posts are unchanged.
 
 All six requested settings use their exact lowercase names. The application
 reads them directly from Home Assistant's `/data/options.json`; the HA startup

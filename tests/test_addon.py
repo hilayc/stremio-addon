@@ -56,6 +56,62 @@ def test_tokens():
             t.verify(value, scope)
 
 
+@pytest.mark.parametrize('value,expected', [
+    (None, None), ('', None), ('  ', None),
+    ('-100123,-100456', frozenset({-100123, -100456})),
+    (' -100123, -100123 ', frozenset({-100123})),
+])
+def test_channel_ids_settings(monkeypatch, value, expected):
+    import stremio_addon.core as core
+    monkeypatch.setattr(core.Path, 'is_file', lambda self: False)
+    for key, setting in dict(addon_url='https://example.com', api_key='a'*32,
+                             api_id='123', api_hash='hash', user_session_string='session').items():
+        monkeypatch.setenv(key, setting)
+    monkeypatch.delenv('channel_ids', raising=False)
+    monkeypatch.delenv('CHANNEL_IDS', raising=False)
+    if value is not None:
+        monkeypatch.setenv('CHANNEL_IDS', value)
+    assert Settings.env().channel_ids == expected
+
+
+@pytest.mark.parametrize('value', ['123', '-0', '-123,', ',-123', '-123,, -456', 'channel'])
+def test_channel_ids_reject_invalid(monkeypatch, value):
+    with pytest.raises(ValueError, match='CHANNEL_IDS'):
+        test_channel_ids_settings(monkeypatch, value, None)
+
+
+@pytest.mark.asyncio
+async def test_channel_filter_and_reselection(tmp_path):
+    from datetime import datetime, timezone
+    from telethon import types, utils
+    store = Store(tmp_path / 'db')
+    cfg = Settings(8000, 'http://localhost', 'a'*32, 1, 'hash', '', tmp_path)
+    gateway = Telegram(cfg, store)
+    entities = [types.Channel(id=i, title=str(i), photo=types.ChatPhotoEmpty(),
+                              date=datetime.now(timezone.utc), broadcast=True)
+                for i in (123, 456)]
+    ids = [utils.get_peer_id(e) for e in entities]
+    class Client:
+        async def iter_dialogs(self):
+            for entity in entities:
+                yield SimpleNamespace(entity=entity)
+    gateway.client = Client()
+    await gateway.discover()
+    assert set(gateway.channels) == set(ids)
+    store.upsert(row(id=f'tg:{ids[1]}:7', channel=ids[1]))
+    store.save_checkpoint(dict(channel=ids[1], oldest=1, newest=7, complete=1))
+    gateway.channel_ids = frozenset({ids[0]})
+    await gateway.discover()
+    assert set(gateway.channels) == {ids[0]}
+    assert not store.catalog()
+    assert store.checkpoint(ids[1])['complete'] == 0
+    gateway.channel_ids = None
+    await gateway.discover()
+    assert set(gateway.channels) == set(ids)
+    assert store.checkpoint(ids[1])['oldest'] == 0
+    store.db.close()
+
+
 def test_home_assistant_options_fallback(tmp_path, monkeypatch):
     import stremio_addon.core as core
     options = tmp_path / 'options.json'
@@ -66,10 +122,13 @@ def test_home_assistant_options_fallback(tmp_path, monkeypatch):
       "api_id": 12345,
       "api_hash": "hash",
       "user_session_string": "session",
-      "cache_mb": 42
+      "cache_mb": 42,
+      "CHANNEL_IDS": "-100123,-100456"
     }''')
     real_path = core.Path
     monkeypatch.setattr(core, 'Path', lambda value: options if value == '/data/options.json' else real_path(value))
+    monkeypatch.delenv('CHANNEL_IDS', raising=False)
+    monkeypatch.delenv('channel_ids', raising=False)
     for name in ('port', 'addon_url', 'api_key', 'api_id', 'api_hash', 'user_session_string', 'cache_mb',
                  'PORT', 'ADDON_URL', 'API_KEY', 'API_ID', 'API_HASH', 'USER_SESSION_STRING', 'CACHE_MB'):
         monkeypatch.delenv(name, raising=False)
@@ -78,6 +137,7 @@ def test_home_assistant_options_fallback(tmp_path, monkeypatch):
     assert settings.url == 'https://telegram.example.com'
     assert settings.api_id == 12345
     assert settings.cache_bytes == 42 * 1024**2
+    assert settings.channel_ids == frozenset({-100123, -100456})
     assert settings.data == real_path('/data/stremio')
 
 

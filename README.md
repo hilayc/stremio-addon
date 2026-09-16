@@ -60,6 +60,16 @@ proxy to `addon:8000`. The included Compose mapping uses lowercase `port`.
 | `user_session_string` | Authorized Telethon StringSession |
 | `cache_mb` | Optional disk chunk-cache ceiling; default `512`, `0` disables writes |
 | `data_dir` | Optional data directory; default `/data` |
+| `CHANNEL_IDS` | Optional comma-separated negative channel IDs, e.g. `-1001234567890,-1009876543210` |
+
+Set `CHANNEL_IDS` to scan only the listed joined private broadcast channels.
+Omit it or leave it blank to scan all joined private broadcast channels as before.
+Spaces around IDs and duplicate IDs are accepted; malformed lists fail startup.
+Use the full negative IDs shown in `/status` checkpoints. Restart after changing
+the list. Previously indexed uploads from excluded channels disappear from the
+catalog at discovery; Telegram posts are untouched. Re-including a channel
+starts its history scan again. This option does not join channels or include
+public channels or groups.
 
 The app accepts uppercase equivalents, with lowercase taking precedence.
 Under Home Assistant, these settings are also read directly from
