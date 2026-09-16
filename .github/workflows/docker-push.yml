@@ -5,7 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
-    tags: ['**']
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -52,7 +52,7 @@ jobs:
 
   publish:
     # Only creation of a remote Git tag can publish an image.
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && github.event.created == true && github.event.deleted == false
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.event.created == true && github.event.deleted == false
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -61,17 +61,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-      - name: Validate and prepare the exact image tag
+      - name: Set up Python for release automation
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Validate release tag and remove the v prefix
         id: image
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          if [[ ! "$RELEASE_TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
-            echo '::error::The Git tag must also be a valid Docker tag.'
-            exit 1
-          fi
-          echo "name=${REGISTRY}/${IMAGE_NAME,,}:${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+        run: python scripts/release_version.py prepare
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Log in to GHCR
@@ -89,7 +87,7 @@ jobs:
           push: true
           tags: ${{ steps.image.outputs.name }}
           build-args: |
-            BUILD_VERSION=${{ github.ref_name }}
+            BUILD_VERSION=${{ steps.image.outputs.version }}
             BUILD_ARCH=amd64
       - name: Export Docker image for the release
         env:
@@ -102,3 +100,8 @@ jobs:
         with:
           files: docker-image.tar
           generate_release_notes: true
+      - name: Update Home Assistant version on main without triggering CI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/release_version.py update
