@@ -1,7 +1,8 @@
 # Releasing
 
-PRs targeting `main` and pushes to `main` run tests and a Docker build without
-publishing. To release, push a new semantic-version tag with a lowercase `v`
+The `ci.yml` workflow runs tests and a Docker build without publishing on PRs
+targeting `main` and pushes to `main`. The separate `release.yml` workflow runs
+only on `v*` tags. To release, push a new semantic-version tag with a lowercase `v`
 prefix, for example:
 
 ```sh
@@ -11,7 +12,9 @@ git push origin v1.0.4
 
 The tag must include the workflow and `scripts/release_version.py`. The workflow
 runs tests, publishes `ghcr.io/hilayc/stremio-addon:1.0.4`, and creates the GitHub
-Release `v1.0.4` with its image archive. It then updates only the top-level
+Release `v1.0.4` if it does not already exist. Images are published to GHCR only;
+no Docker tar archive is exported or uploaded. Existing release notes are preserved,
+and notes are generated only when creating a new release. It then updates the top-level
 `version` in `addon/config.yaml` on `main` to `"1.0.4"`. The Docker build version
 label also uses `1.0.4`. No `main` or `latest` Docker tag is published.
 

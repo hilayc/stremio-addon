@@ -53,7 +53,34 @@ def request(method, url, token, payload=None):
         return json.load(response)
 
 
+def ensure_release(version, api_request=request):
+    """Generate notes only for a new release; preserve existing release bodies."""
+    token = os.environ['GITHUB_TOKEN']
+    endpoint = (os.environ.get('GITHUB_API_URL', 'https://api.github.com')
+                + '/repos/' + os.environ['GITHUB_REPOSITORY'])
+    tag = 'v' + version
+    try:
+        api_request('GET', endpoint + '/releases/tags/' + quote(tag, safe=''), token)
+    except HTTPError as exc:
+        if exc.code != 404:
+            raise
+        api_request('POST', endpoint + '/releases', token, {
+            'tag_name': tag, 'name': tag, 'generate_release_notes': True,
+        })
+
+
 def update_changelog(content, version, notes):
+    # Older workflow reruns appended the generated comparison link twice.
+    # Repair only that exact generated paragraph, preserving other release text.
+    seen_links = set()
+    paragraphs = []
+    for paragraph in notes.strip().split('\n\n'):
+        if re.fullmatch(r'\*\*Full Changelog\*\*: https://github\.com/\S+/compare/\S+', paragraph):
+            if paragraph in seen_links:
+                continue
+            seen_links.add(paragraph)
+        paragraphs.append(paragraph)
+    notes = '\n\n'.join(paragraphs)
     start = f'<!-- release:{version}:start -->'
     end = f'<!-- release:{version}:end -->'
     entry = f'{start}\n## {version}\n\n{notes.strip()}\n{end}'
@@ -135,13 +162,15 @@ def update_main(version, api_request=request, pause=time.sleep):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['prepare', 'update'])
+    parser.add_argument('command', choices=['prepare', 'release', 'update'])
     args = parser.parse_args()
     version = release_version(os.environ['RELEASE_TAG'])
     if args.command == 'prepare':
         image = f"ghcr.io/{os.environ['GITHUB_REPOSITORY'].lower()}:{version}"
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
             output.write(f'version={version}\nname={image}\n')
+    elif args.command == 'release':
+        ensure_release(version)
     else:
         update_main(version)
 

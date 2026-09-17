@@ -1,10 +1,7 @@
-name: Test, Build, and Publish Tagged Images
+name: Release
 
 on:
-  pull_request:
-    branches: [main]
   push:
-    branches: [main]
     tags: ['v*']
 
 permissions:
@@ -12,7 +9,6 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   test:
@@ -32,23 +28,6 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: Run tests
         run: python -m pytest -q
-
-  build:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Build Docker image without publishing
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          push: false
 
   publish:
     # Only creation of a remote Git tag can publish an image.
@@ -89,17 +68,11 @@ jobs:
           build-args: |
             BUILD_VERSION=${{ steps.image.outputs.version }}
             BUILD_ARCH=amd64
-      - name: Export Docker image for the release
+      - name: Create GitHub Release if missing
         env:
-          RELEASE_IMAGE: ${{ steps.image.outputs.name }}
-        run: |
-          docker pull "$RELEASE_IMAGE"
-          docker save "$RELEASE_IMAGE" > docker-image.tar
-      - name: Create GitHub Release and upload image
-        uses: softprops/action-gh-release@v3
-        with:
-          files: docker-image.tar
-          generate_release_notes: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/release_version.py release
       - name: Update Home Assistant version and changelog without triggering CI
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

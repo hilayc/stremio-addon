@@ -134,3 +134,44 @@ def test_permission_failure_does_not_retry(auth):
         release.update_main('1.3.0', api_request=denied)
     assert exc.value.code == 403
     assert len(api.commits) == 1
+
+
+def test_existing_release_notes_are_never_regenerated(auth):
+    calls = []
+    def api(method, url, token, payload=None):
+        calls.append(method)
+        return {'tag_name': 'v1.3.0', 'body': 'Existing notes'}
+    release.ensure_release('1.3.0', api_request=api)
+    release.ensure_release('1.3.0', api_request=api)
+    assert calls == ['GET', 'GET']
+
+
+def test_duplicate_generated_comparison_link_is_repaired():
+    link = '**Full Changelog**: https://github.com/owner/repo/compare/v1.2.0...v1.3.0'
+    notes = '## Changes\n- Keep this.\n\n' + link + '\n\n' + link
+    updated = release.update_changelog('', '1.3.0', notes)
+    assert updated.count(link) == 1
+    assert '## Changes\n- Keep this.' in updated
+    assert release.update_changelog(updated, '1.3.0', notes) == updated
+
+
+def test_missing_release_generates_notes_once(auth):
+    calls = []
+    def api(method, url, token, payload=None):
+        calls.append((method, payload))
+        if method == 'GET':
+            raise HTTPError(url, 404, 'Not Found', {}, None)
+        assert url.endswith('/releases')
+        return {}
+    release.ensure_release('1.3.0', api_request=api)
+    assert calls == [('GET', None), ('POST', {
+        'tag_name': 'v1.3.0', 'name': 'v1.3.0', 'generate_release_notes': True,
+    })]
+
+
+def test_release_lookup_failure_does_not_create_release(auth):
+    def api(method, url, token, payload=None):
+        assert method == 'GET'
+        raise HTTPError(url, 403, 'Forbidden', {}, None)
+    with pytest.raises(HTTPError):
+        release.ensure_release('1.3.0', api_request=api)
