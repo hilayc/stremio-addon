@@ -96,6 +96,9 @@ The debug dashboard is available directly on `debug_port`. Sign in with the
 configured API key to inspect channels, indexing progress, recent searches, and
 read-only search results. It does not expose playback URLs and does not use
 `addon_url` for its own requests.
+The add-on page's **Open Web UI** button opens the dashboard on its standard
+port. Use **Sync now** in the dashboard after joining a channel or adding a video
+to trigger channel discovery and catch-up indexing immediately.
 
 SQLite and video chunks persist under `/data/stremio`; Supervisor keeps options
 separately in `/data/options.json`. Restart the add-on after changing options.
