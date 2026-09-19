@@ -1,5 +1,15 @@
 # Changelog
 
+<!-- release:1.2.1:start -->
+## 1.2.1
+
+## What's Changed
+* Add dashboard sync controls and Home Assistant Web UI link by @hilayc in https://github.com/hilayc/stremio-addon/pull/2
+
+
+**Full Changelog**: https://github.com/hilayc/stremio-addon/compare/v1.2.0...v1.2.1
+<!-- release:1.2.1:end -->
+
 <!-- release:1.2.0:start -->
 ## 1.2.0
 

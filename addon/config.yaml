@@ -1,5 +1,5 @@
 name: Stremio Telegram
-version: "1.2.0"
+version: "1.2.1"
 slug: stremio_telegram
 description: Private Telegram video sources for Stremio with Hebrew search
 url: https://github.com/hilayc/stremio-addon
