@@ -21,6 +21,7 @@ class Telegram:
         self.cache.mkdir(exist_ok=True)
         self.cache_limit = max(0, settings.cache_bytes)
         self.download_slots = asyncio.Semaphore(4)
+        self.sync_requested = asyncio.Event()
         self.task = None
         self.reconcile_cursor = ''
 
@@ -46,6 +47,10 @@ class Telegram:
             except asyncio.CancelledError:
                 pass
         await self.client.disconnect()
+
+    def request_sync(self):
+        """Wake the indexer and force channel discovery plus catch-up scans."""
+        self.sync_requested.set()
 
     async def discover(self):
         channels = {}
@@ -132,7 +137,9 @@ class Telegram:
         next_discovery = 0
         while True:
             try:
-                if time.time() >= next_discovery:
+                forced = self.sync_requested.is_set()
+                self.sync_requested.clear()
+                if forced or time.time() >= next_discovery:
                     await self.discover()
                     next_discovery = time.time() + 300
                 for channel, entity in list(self.channels.items()):
@@ -146,7 +153,10 @@ class Telegram:
                 await self.reconcile()
                 incomplete = any(not self.store.checkpoint(c)['complete'] for c in self.channels)
                 self.status.update(phase='indexing' if incomplete else 'ready', last_error=None)
-                await asyncio.sleep(2 if incomplete else 30)
+                try:
+                    await asyncio.wait_for(self.sync_requested.wait(), 2 if incomplete else 30)
+                except TimeoutError:
+                    pass
             except errors.FloodWaitError as exc:
                 self.status.update(phase='rate_limited', last_error='Telegram flood wait', retry_after=exc.seconds)
                 await asyncio.sleep(exc.seconds)

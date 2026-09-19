@@ -4,6 +4,7 @@ slug: stremio_telegram
 description: Private Telegram video sources for Stremio with Hebrew search
 url: https://github.com/hilayc/stremio-addon
 image: ghcr.io/hilayc/stremio-addon
+webui: "http://[HOST]:[PORT:8001]"
 arch:
   - amd64
 startup: application

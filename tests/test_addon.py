@@ -193,6 +193,7 @@ class FakeTelegram:
         self.channels = {-100123: 'channel'}
         self.client = SimpleNamespace(is_connected=lambda: True)
         self.status = {'phase': 'ready'}
+        self.sync_requests = 0
     async def start(self):
         self.store.upsert(row())
     async def close(self):
@@ -201,6 +202,8 @@ class FakeTelegram:
         return SimpleNamespace(document=SimpleNamespace(size=10))
     async def stream(self, row, message, start, end):
         yield b'0123456789'[start:end + 1]
+    def request_sync(self):
+        self.sync_requests += 1
 
 
 def test_debug_dashboard_is_read_only_and_shows_queried_channels(tmp_path):
@@ -226,8 +229,10 @@ def test_debug_dashboard_is_read_only_and_shows_queried_channels(tmp_path):
         assert 'url' not in result['results'][0]
         assert client.get('/play/anything', headers=headers).status_code == 404
         assert client.get('/thumb/anything', headers=headers).status_code == 404
+        assert client.post('/api/sync', headers=headers).status_code == 202
+        assert app.state.runtime.tg.sync_requests == 1
         events = client.get('/api/activity', headers=headers).json()['events']
-        assert events[0]['event'] == 'debug_search'
+        assert events[0]['event'] == 'sync_requested'
 
 
 def test_http(tmp_path):

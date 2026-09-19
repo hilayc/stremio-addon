@@ -108,6 +108,14 @@ def create_debug_app(runtime):
         authorize(x_debug_key)
         return {'events': list(app.state.runtime.events)}
 
+    @app.post('/api/sync', status_code=202)
+    async def sync(x_debug_key: str | None = Header(None)):
+        authorize(x_debug_key)
+        shared = app.state.runtime
+        shared.tg.request_sync()
+        shared.record({'event': 'sync_requested', 'status': 202})
+        return {'accepted': True}
+
     @app.get('/api/search')
     async def search(
         q: str = Query('', max_length=500),

@@ -82,6 +82,8 @@ connection and indexing state, every channel included in queries, recent addon
 activity, and read-only text or IMDb searches. Search results expose diagnostic
 metadata and matching reasons, but the debug server does not register playback,
 thumbnail, mapping, or download routes and never returns signed media URLs.
+Use **Sync now** after joining a private channel or adding a video to wake the
+indexer immediately, rediscover channels, and run the normal catch-up scan.
 
 The dashboard always calls relative `/api/...` paths on its own listener. The
 `addon_url` setting is used only by the Stremio API when it creates stream and
