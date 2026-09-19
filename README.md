@@ -54,6 +54,9 @@ proxy to `addon:8000`. The included Compose mapping uses lowercase `port`.
 |---|---|
 | `port` | Listener port; default `8000` |
 | `addon_url` | External HTTPS base URL, optionally with a path prefix |
+| `debug_enabled` | Enable the read-only debug dashboard (default `true`) |
+| `debug_port` | Separate dashboard port (default `8001`) |
+| `debug_host` | Dashboard listen address (default `0.0.0.0`) |
 | `api_key` | At least 32 URL-safe letters, digits, `_` or `-` |
 | `api_id` | Telegram application ID from https://my.telegram.org |
 | `api_hash` | Telegram application hash |
@@ -70,6 +73,19 @@ the list. Previously indexed uploads from excluded channels disappear from the
 catalog at discovery; Telegram posts are untouched. Re-including a channel
 starts its history scan again. This option does not join channels or include
 public channels or groups.
+
+### Debug dashboard
+
+With `debug_enabled=true`, open `http://HOST:8001` (or the configured
+`debug_port`) and sign in with the add-on API key. The dashboard shows Telegram
+connection and indexing state, every channel included in queries, recent addon
+activity, and read-only text or IMDb searches. Search results expose diagnostic
+metadata and matching reasons, but the debug server does not register playback,
+thumbnail, mapping, or download routes and never returns signed media URLs.
+
+The dashboard always calls relative `/api/...` paths on its own listener. The
+`addon_url` setting is used only by the Stremio API when it creates stream and
+thumbnail URLs.
 
 The app accepts uppercase equivalents, with lowercase taking precedence.
 Under Home Assistant, these settings are also read directly from

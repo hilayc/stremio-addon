@@ -13,6 +13,9 @@ host_network: true
 timeout: 30
 options:
   port: 8000
+  debug_enabled: true
+  debug_port: 8001
+  debug_host: "0.0.0.0"
   addon_url: ""
   api_key: ""
   api_id: 0
@@ -22,6 +25,9 @@ options:
   CHANNEL_IDS: ""
 schema:
   port: port
+  debug_enabled: bool
+  debug_port: port
+  debug_host: str
   addon_url: url
   api_key: password
   api_id: int(1,)

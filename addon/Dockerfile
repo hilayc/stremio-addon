@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY stremio_addon /app/addon
 COPY generate_session.py /app/generate_session.py
 COPY addon/start.py /app/ha_start.py
+EXPOSE 8000 8001
 
 # Retain the HA base image's /init entrypoint (s6); it runs this command.
 CMD ["python", "/app/ha_start.py"]
