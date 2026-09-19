@@ -6,7 +6,8 @@ from pathlib import Path
 
 FIELDS = (
     "port", "addon_url", "api_key", "api_id", "api_hash",
-    "user_session_string", "cache_mb", "CHANNEL_IDS",
+    "user_session_string", "cache_mb", "CHANNEL_IDS", "debug_port",
+    "debug_host", "debug_enabled",
 )
 
 
@@ -45,7 +46,8 @@ def main():
             "generate_session.py, then paste only its complete output value into "
             "the add-on's user_session_string option."
         )
-    print(f"Starting Stremio Telegram on port {settings.port}", flush=True)
+    debug = f" and debug dashboard on {settings.debug_host}:{settings.debug_port}" if settings.debug_enabled else ""
+    print(f"Starting Stremio Telegram on port {settings.port}{debug}", flush=True)
     os.execv(sys.executable, [sys.executable, "-m", "addon"])
 
 

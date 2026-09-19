@@ -11,8 +11,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
-from .core import Settings, Store, Tokens, byte_range
-from .metadata import Metadata
+from .core import byte_range
+from .runtime import Runtime
 from .telegram import Telegram
 from .version import get_version
 
@@ -31,22 +31,21 @@ def safe_log_text(value, cfg):
 
 
 def create_app(settings=None, gateway_factory=Telegram):
+    runtime = Runtime(settings, gateway_factory)
+    return create_app_with_runtime(runtime)
+
+
+def create_app_with_runtime(runtime):
     @asynccontextmanager
     async def lifespan(app):
-        cfg = settings or Settings.env()
-        cfg.data.mkdir(parents=True, exist_ok=True)
-        store = Store(cfg.data / 'index.sqlite3')
-        gateway = gateway_factory(cfg, store)
-        metadata = Metadata()
-        app.state.cfg, app.state.store, app.state.tg = cfg, store, gateway
-        app.state.tokens, app.state.metadata = Tokens(cfg.key), metadata
+        shared = await runtime.acquire()
+        app.state.runtime = shared
+        app.state.cfg, app.state.store, app.state.tg = shared.cfg, shared.store, shared.tg
+        app.state.tokens, app.state.metadata = shared.tokens, shared.metadata
         try:
-            await gateway.start()
             yield
         finally:
-            await gateway.close()
-            await metadata.http.aclose()
-            store.db.close()
+            await runtime.release()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['GET', 'HEAD', 'OPTIONS', 'PUT'], allow_headers=['Range', 'Content-Type'], expose_headers=['Content-Range', 'Content-Length', 'Accept-Ranges'])
@@ -70,6 +69,7 @@ def create_app(settings=None, gateway_factory=Telegram):
                     summary['error'] = error
                 interaction_log.log(logging.WARNING if status_code >= 400 else logging.INFO,
                                     '%s', json.dumps(summary, ensure_ascii=False))
+                runtime.record(summary)
         response.headers['Cache-Control'] = 'private, no-store'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Content-Type-Options'] = 'nosniff'

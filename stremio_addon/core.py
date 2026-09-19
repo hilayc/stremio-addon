@@ -44,6 +44,9 @@ class Settings:
     data: Path
     cache_bytes: int = 512 * 1024 * 1024
     channel_ids: frozenset[int] | None = None
+    debug_port: int = 8001
+    debug_host: str = '0.0.0.0'
+    debug_enabled: bool = True
 
     @classmethod
     def env(cls):
@@ -95,7 +98,20 @@ class Settings:
             if any(not re.fullmatch(r'-[1-9][0-9]*', part) for part in parts):
                 raise ValueError('CHANNEL_IDS must contain only comma-separated negative channel IDs')
             channel_ids = frozenset(int(part) for part in parts)
-        return cls(int(get('port', '8000')), url, key, int(get('api_id')), get('api_hash'), get('user_session_string'), Path(get('data_dir', default_data)), int(get('cache_mb', '512')) * 1024**2, channel_ids)
+        port = int(get('port', '8000'))
+        debug_port = int(get('debug_port', '8001'))
+        debug_host = get('debug_host', '0.0.0.0')
+        raw_debug_enabled = get('debug_enabled', 'true').lower()
+        if raw_debug_enabled not in ('1', 'true', 'yes', 'on', '0', 'false', 'no', 'off'):
+            raise ValueError('debug_enabled must be true or false')
+        debug_enabled = raw_debug_enabled in ('1', 'true', 'yes', 'on')
+        if debug_enabled and debug_port == port:
+            raise ValueError('debug_port must differ from port')
+        if not 1 <= debug_port <= 65535:
+            raise ValueError('debug_port must be between 1 and 65535')
+        return cls(port, url, key, int(get('api_id')), get('api_hash'), get('user_session_string'),
+                   Path(get('data_dir', default_data)), int(get('cache_mb', '512')) * 1024**2,
+                   channel_ids, debug_port, debug_host, debug_enabled)
 
 
 class Tokens:

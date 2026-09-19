@@ -50,6 +50,9 @@ Set these options in the add-on's Configuration tab:
 | --- | --- |
 | `port` | Unused host TCP port, default `8000` |
 | `addon_url` | External HTTPS base URL of your reverse proxy |
+| `debug_enabled` | Enable the read-only debug dashboard (default `true`) |
+| `debug_port` | Separate dashboard port (default `8001`) |
+| `debug_host` | Dashboard listen address (default `0.0.0.0`) |
 | `api_key` | At least 32 random URL-safe characters |
 | `api_id` | Positive Telegram application ID |
 | `api_hash` | Telegram application hash |
@@ -62,7 +65,7 @@ the add-on. Only those joined private broadcast channels will be indexed.
 Existing catalog entries from excluded channels are removed on discovery;
 selecting them again restarts their history scan. Telegram posts are unchanged.
 
-All six requested settings use their exact lowercase names. The application
+The settings use their exact lowercase names. The application
 reads them directly from Home Assistant's `/data/options.json`; the HA startup
 wrapper also exports them as environment variables. This makes both the generic
 repository image and the HA-specific image work under Supervisor. Explicit
@@ -89,6 +92,11 @@ https://YOUR_DOMAIN/YOUR_API_KEY/manifest.json
 ```
 
 The protected `/<api_key>/status` endpoint shows Telegram indexing progress.
+The debug dashboard is available directly on `debug_port`. Sign in with the
+configured API key to inspect channels, indexing progress, recent searches, and
+read-only search results. It does not expose playback URLs and does not use
+`addon_url` for its own requests.
+
 SQLite and video chunks persist under `/data/stremio`; Supervisor keeps options
 separately in `/data/options.json`. Restart the add-on after changing options.
 

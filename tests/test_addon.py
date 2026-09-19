@@ -4,7 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 from stremio_addon.core import Settings, Store, Tokens, byte_range, normalize, parse_title
 from stremio_addon.app import create_app
+from stremio_addon.debug import create_debug_app
 from stremio_addon.metadata import Metadata
+from stremio_addon.runtime import Runtime
 from stremio_addon.telegram import Telegram, CHUNK
 
 
@@ -174,6 +176,17 @@ def test_environment_overrides_home_assistant_options(tmp_path, monkeypatch):
     assert core.Settings.env().url == 'https://environment.example.com'
 
 
+def test_debug_port_must_be_separate(monkeypatch):
+    import stremio_addon.core as core
+    monkeypatch.setattr(core.Path, 'is_file', lambda self: False)
+    for name, value in dict(port='8000', debug_port='8000', addon_url='https://example.com',
+                            api_key='a' * 32, api_id='1', api_hash='hash',
+                            user_session_string='session').items():
+        monkeypatch.setenv(name, value)
+    with pytest.raises(ValueError, match='debug_port'):
+        Settings.env()
+
+
 class FakeTelegram:
     def __init__(self, cfg, store):
         self.store = store
@@ -188,6 +201,33 @@ class FakeTelegram:
         return SimpleNamespace(document=SimpleNamespace(size=10))
     async def stream(self, row, message, start, end):
         yield b'0123456789'[start:end + 1]
+
+
+def test_debug_dashboard_is_read_only_and_shows_queried_channels(tmp_path):
+    key = 'a' * 32
+    cfg = Settings(8000, 'https://public.example.com/prefix', key, 1, 'hash',
+                   'session', tmp_path, debug_port=9123)
+    app = create_debug_app(Runtime(cfg, FakeTelegram))
+    with TestClient(app) as client:
+        assert client.get('/').status_code == 200
+        assert client.get('/api/overview').status_code == 401
+        headers = {'X-Debug-Key': key}
+        overview = client.get('/api/overview', headers=headers).json()
+        assert overview['debug_port'] == 9123
+        assert overview['videos'] == 1
+        response = client.get('/api/search', params={'q': 'שם', 'mode': 'text'},
+                              headers=headers)
+        assert response.status_code == 200
+        result = response.json()
+        assert result['result_count'] == 1
+        assert result['channels_queried'][0]['id'] == -100123
+        assert result['results_by_channel']['-100123'] == 1
+        assert result['results'][0]['matched_by'] == 'full-text index'
+        assert 'url' not in result['results'][0]
+        assert client.get('/play/anything', headers=headers).status_code == 404
+        assert client.get('/thumb/anything', headers=headers).status_code == 404
+        events = client.get('/api/activity', headers=headers).json()['events']
+        assert events[0]['event'] == 'debug_search'
 
 
 def test_http(tmp_path):
