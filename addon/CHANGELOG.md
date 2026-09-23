@@ -1,5 +1,15 @@
 # Changelog
 
+<!-- release:1.3.0:start -->
+## 1.3.0
+
+## What's Changed
+* Add addon icon branding by @hilayc in https://github.com/hilayc/stremio-addon/pull/5
+
+
+**Full Changelog**: https://github.com/hilayc/stremio-addon/compare/v1.2.3...v1.3.0
+<!-- release:1.3.0:end -->
+
 <!-- release:1.2.3:start -->
 ## 1.2.3
 
