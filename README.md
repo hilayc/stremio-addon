@@ -43,12 +43,7 @@ Videos stream through your server without transcoding. Playback compatibility de
 | `addon/config.yaml` | Home Assistant options, supported architecture, image, and version |
 | `tests/` | Automated application and release tests |
 | `scripts/` | Release version and changelog tooling |
-| `.github/workflows/` | CI checks and release automation |
-| `Dockerfile` | Standalone application image |
-| `compose.yaml` | Docker Compose service and persistent volume |
-| `.env.example` | Example standalone configuration |
 | `generate_session.py` | Interactive Telegram session generator |
-| `requirements.txt` | Python runtime dependencies |
 | `repository.json` | Home Assistant custom repository metadata |
 
 The container build copies `stremio_addon/` into its internal `addon` Python package. Both installation methods run the same application.
@@ -73,7 +68,6 @@ Set these values in `.env` for Docker Compose. In Home Assistant, enter the corr
 | `cache_mb` | Disk chunk-cache limit in MiB; `0` disables new cache writes. | `false` | `512` | `1024` |
 | `CHANNEL_IDS` | Comma-separated negative IDs limiting which joined private broadcast channels are indexed. Blank selects all eligible channels. | `false` | Empty | `-1001234567890,-1009876543210` |
 | `data_dir` | Persistent index and cache directory. Home Assistant manages this automatically; it is not a UI option. | `false` | `/data` standalone; `/data/stremio` in Home Assistant | `/data` |
-| `APP_VERSION` | Advanced: manifest version, normally supplied by the image build. Invalid or unset values fall back to `0.0.0-dev`. | `false` | Image-defined | `1.2.1` |
 
 Use the variable names shown above. The application also accepts uppercase equivalents for lowercase settings, with nonempty lowercase values taking precedence. `CHANNEL_IDS` takes precedence over its lowercase alias. The supplied Compose port mappings use lowercase `port` and `debug_port`.
 
