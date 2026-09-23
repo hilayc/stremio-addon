@@ -26,11 +26,20 @@ def create_debug_app(runtime):
 
     @app.middleware('http')
     async def private_headers(request, call_next):
+        # Home Assistant ingress can prepend ingress_entry ('/') to an already
+        # slash-prefixed request path, so the backend may receive // or //api/....
+        # Frigate's nginx layer normalizes this; FastAPI does not, so do it here.
+        path = request.scope.get('path', '/')
+        normalized_path = '/' + path.lstrip('/')
+        if normalized_path != path:
+            request.scope['path'] = normalized_path
+            request.scope['raw_path'] = normalized_path.encode('utf-8')
+
         response = await call_next(request)
         response.headers['Cache-Control'] = 'private, no-store'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         return response
 
     def authorize(key):
