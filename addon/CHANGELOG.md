@@ -1,5 +1,15 @@
 # Changelog
 
+<!-- release:1.2.2:start -->
+## 1.2.2
+
+## What's Changed
+* docs: refresh README with Docker and Home Assistant setup by @hilayc in https://github.com/hilayc/stremio-addon/pull/3
+
+
+**Full Changelog**: https://github.com/hilayc/stremio-addon/compare/v1.2.1...v1.2.2
+<!-- release:1.2.2:end -->
+
 <!-- release:1.2.1:start -->
 ## 1.2.1
 
