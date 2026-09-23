@@ -1,5 +1,9 @@
 # 📡 Telegram → Stremio
 
+<p align="center">
+  <img src="stremio_addon/icon.png" alt="Stremio Telegram addon icon" width="180" />
+</p>
+
 **Your Telegram videos, available in Stremio.**
 
 A self-hosted addon that connects to your Telegram user account, discovers joined private broadcast channels, and indexes uploaded videos for browsing, searching, and streaming through your server.

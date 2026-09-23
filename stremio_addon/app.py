@@ -116,7 +116,9 @@ def create_app_with_runtime(runtime):
     async def manifest(key):
         auth(key)
         return {'id': 'community.private.telegram', 'version': get_version(), 'name': 'Private Telegram Videos',
-                'description': 'Your private Telegram videos with Hebrew and English search.', 'types': ['movie', 'series'],
+                'description': 'Stream your private Telegram videos',
+                'logo': 'https://raw.githubusercontent.com/hilayc/stremio-addon/main/stremio_addon/icon.png',
+                'types': ['movie', 'series'],
                 'resources': [{'name': 'catalog', 'types': ['movie']}, {'name': 'meta', 'types': ['movie'], 'idPrefixes': ['tg:']}, {'name': 'stream', 'types': ['movie', 'series'], 'idPrefixes': ['tg:', 'tt']}],
                 'catalogs': [{'type': 'movie', 'id': 'telegram', 'name': 'Telegram Videos', 'extra': [{'name': 'search', 'isRequired': False}, {'name': 'skip', 'isRequired': False}]}]}
 
