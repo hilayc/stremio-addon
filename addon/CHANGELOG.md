@@ -1,5 +1,15 @@
 # Changelog
 
+<!-- release:1.2.3:start -->
+## 1.2.3
+
+## What's Changed
+* Add Home Assistant ingress routing for debug UI by @hilayc in https://github.com/hilayc/stremio-addon/pull/4
+
+
+**Full Changelog**: https://github.com/hilayc/stremio-addon/compare/v1.2.2...v1.2.3
+<!-- release:1.2.3:end -->
+
 <!-- release:1.2.2:start -->
 ## 1.2.2
 
