@@ -1,188 +1,327 @@
-# Private Telegram → Stremio
+# 📡 Telegram → Stremio
 
-A single-container Stremio addon using a **Telegram user account**, FastAPI,
-Telethon, and SQLite FTS5. It discovers joined private broadcast channels
-(including archived dialogs), indexes uploaded videos and video documents,
-and streams their bytes through your server.
+**Your Telegram videos, available in Stremio.**
 
-## Start
+A self-hosted addon that connects to your Telegram user account, discovers joined private broadcast channels, and indexes uploaded videos for browsing, searching, and streaming through your server.
 
-1. Copy `.env.example` to `.env` and fill in your six settings.
-2. Generate a random API key:
-   ```sh
-   python -c "import secrets; print(secrets.token_urlsafe(32))"
-   ```
-3. Generate a **Telethon** session on a trusted machine. This is separate from
-   the unattended server and supports Telegram's login code and 2FA:
-   ```sh
-   python -m venv .venv
-   . .venv/bin/activate
-   pip install -r requirements.txt
-   python generate_session.py
-   ```
-   Save its output in `.env` as `user_session_string`. Do not share that value.
-   Use a dedicated session for this addon; do not run several containers with it.
-4. Build and start:
-   ```sh
-   docker compose up --build -d
-   ```
-5. Put an HTTPS reverse proxy in front of `127.0.0.1:8000`. Set `addon_url`
-   to that external base URL. For example, with Caddy installed on the host:
-   ```caddyfile
-   telegram.example.com {
-       reverse_proxy 127.0.0.1:8000
-   }
-   ```
-   DNS must point to your host and ports 80/443 must reach Caddy. Do not enable
-   access logging containing full URLs. Disable proxy caching and response
-   buffering; allow long streaming requests and forward Range headers.
-6. In Stremio's addon installation field, paste:
-   ```text
-   https://telegram.example.com/YOUR_API_KEY/manifest.json
-   ```
-   The protected `/<api_key>/status` endpoint shows connection state, channel
-   count, indexed videos, and persisted history checkpoints. Initial indexing
-   runs in the background; search results are partial until it completes.
+**🔎 Searchable catalog · 🔄 Background indexing · 🧰 Debug dashboard · 🐳 Docker · 🏠 Home Assistant**
 
-The Compose port is deliberately bound to localhost for a host reverse proxy.
-If your reverse proxy is another container, join both to a Docker network and
-proxy to `addon:8000`. The included Compose mapping uses lowercase `port`.
+---
 
-## Configuration
+## 🧭 Quick navigation
 
-| Environment variable | Meaning |
-|---|---|
-| `port` | Listener port; default `8000` |
-| `addon_url` | External HTTPS base URL, optionally with a path prefix |
-| `debug_enabled` | Enable the read-only debug dashboard (default `true`) |
-| `debug_port` | Separate dashboard port (default `8001`) |
-| `debug_host` | Dashboard listen address (default `0.0.0.0`) |
-| `api_key` | At least 32 URL-safe letters, digits, `_` or `-` |
-| `api_id` | Telegram application ID from https://my.telegram.org |
-| `api_hash` | Telegram application hash |
-| `user_session_string` | Authorized Telethon StringSession |
-| `cache_mb` | Optional disk chunk-cache ceiling; default `512`, `0` disables writes |
-| `data_dir` | Optional data directory; default `/data` |
-| `CHANNEL_IDS` | Optional comma-separated negative channel IDs, e.g. `-1001234567890,-1009876543210` |
+- [Technologies](#-technologies)
+- [Folder layout](#-folder-layout)
+- [Configuration](#-configuration)
+- [Prepare your credentials](#-prepare-your-credentials)
+- [Install with Docker Compose](#-install-with-docker-compose)
+- [Install with Home Assistant](#-install-with-home-assistant)
+- [Debug dashboard](#-debug-dashboard)
 
-Set `CHANNEL_IDS` to scan only the listed joined private broadcast channels.
-Omit it or leave it blank to scan all joined private broadcast channels as before.
-Spaces around IDs and duplicate IDs are accepted; malformed lists fail startup.
-Use the full negative IDs shown in `/status` checkpoints. Restart after changing
-the list. Previously indexed uploads from excluded channels disappear from the
-catalog at discovery; Telegram posts are untouched. Re-including a channel
-starts its history scan again. This option does not join channels or include
-public channels or groups.
+## 🛠️ Technologies
 
-### Debug dashboard
+| Technology | Role |
+| --- | --- |
+| **Python 3.12** | Application runtime |
+| **FastAPI + Uvicorn** | Stremio API, streaming endpoints, and debug server |
+| **Telethon** | Telegram user authentication and channel access |
+| **SQLite FTS5** | Persistent index and full-text search |
+| **HTTPX** | Asynchronous HTTP requests |
+| **Docker Compose** | Standalone container deployment |
+| **Home Assistant Supervisor** | Add-on installation, configuration, and lifecycle |
 
-With `debug_enabled=true`, open `http://HOST:8001` (or the configured
-`debug_port`) and sign in with the add-on API key. The dashboard shows Telegram
-connection and indexing state, every channel included in queries, recent addon
-activity, and read-only text or IMDb searches. Search results expose diagnostic
-metadata and matching reasons, but the debug server does not register playback,
-thumbnail, mapping, or download routes and never returns signed media URLs.
-Use **Sync now** after joining a private channel or adding a video to wake the
-indexer immediately, rediscover channels, and run the normal catch-up scan.
+Videos stream through your server without transcoding. Playback compatibility depends on the codecs supported by your Stremio device.
 
-The dashboard always calls relative `/api/...` paths on its own listener. The
-`addon_url` setting is used only by the Stremio API when it creates stream and
-thumbnail URLs.
+## 📂 Folder layout
 
-The app accepts uppercase equivalents, with lowercase taking precedence.
-Under Home Assistant, these settings are also read directly from
-`/data/options.json`, and persistent application data defaults to
-`/data/stremio`.
-Only correctly spelled variables are used. The named volume preserves the index
-and cache. One process/worker owns the client and database. Do not scale replicas
-against the same data directory. The image runs as UID 10001; bind mounts need
-appropriate ownership. Changing `port` also requires updating proxy configuration.
+> **Application code lives in `stremio_addon/`. Home Assistant packaging lives in `addon/`.**
 
-## Search and source matching
+| Path | Purpose |
+| --- | --- |
+| `stremio_addon/` | Core Stremio application: API, Telegram integration, indexing, streaming, and debug dashboard |
+| `addon/` | Home Assistant package: configuration, startup wrapper, Dockerfile, documentation, and changelog |
+| `addon/config.yaml` | Home Assistant options, supported architecture, image, and version |
+| `tests/` | Automated application and release tests |
+| `scripts/` | Release version and changelog tooling |
+| `.github/workflows/` | CI checks and release automation |
+| `Dockerfile` | Standalone application image |
+| `compose.yaml` | Docker Compose service and persistent volume |
+| `.env.example` | Example standalone configuration |
+| `generate_session.py` | Interactive Telegram session generator |
+| `requirements.txt` | Python runtime dependencies |
+| `repository.json` | Home Assistant custom repository metadata |
 
-- Browse `Telegram Videos` or use Stremio search. Filenames, full captions, and
-  derived titles are indexed. All uploads, including episodes, appear as
-  standalone playable movie-type entries in this catalog.
-- Hebrew and English display text is preserved. Search removes niqqud,
-  cantillation and invisible direction marks, normalizes quotes/punctuation,
-  and supports mixed languages and prefix terms without stripping Hebrew prefixes.
-- Season/episode parsing supports `S02E05` and `עונה 2 פרק 5`.
-- Existing Stremio movie/series pages request IMDb IDs. Caption/filename IMDb IDs
-  and manual mappings take precedence. Otherwise Cinemeta supplies a title/year,
-  and Wikidata supplies English/Hebrew labels and aliases. These require no API key.
-- Movie inference requires an exact normalized title alias and matching year.
-  Episodes require matching show title, season, and episode. Ambiguous/fuzzy
-  guesses are intentionally omitted. Missing metadata leaves local browsing,
-  search, and explicit mappings usable. Translated titles only match when the
-  provider has the corresponding alias; normalization cannot translate titles.
-- External requests contain only public IMDb identifiers, never your captions,
-  filenames, session, channel IDs, or API key. Results are cached in memory for
-  24 hours (failures for one minute). Providers can throttle or be unavailable.
+The container build copies `stremio_addon/` into its internal `addon` Python package. Both installation methods run the same application.
 
-Correct an indexed item using its `tg:<channel_id>:<message_id>` ID:
+## ⚙️ Configuration
+
+Set these values in `.env` for Docker Compose. In Home Assistant, enter the corresponding options in the add-on's **Configuration** tab.
+
+**Mandatory** is a boolean: `true` means you must supply a value; `false` means a default is available.
+
+| Environment variable | Description | Mandatory | Default | Example |
+| --- | --- | :---: | --- | --- |
+| `addon_url` | Base URL reachable by Stremio; use HTTPS for deployment. May include a path prefix, but no credentials, query, or fragment. | `true` | — | `https://telegram.example.com` |
+| `api_key` | Access key with at least 32 characters: letters, digits, underscores, or hyphens. Generate a unique value. | `true` | — | Generate with the command below |
+| `api_id` | Positive Telegram application ID. | `true` | — | `123456` |
+| `api_hash` | Telegram application hash. | `true` | — | `YOUR_TELEGRAM_API_HASH` |
+| `user_session_string` | Complete authorized Telethon StringSession from the session generator. | `true` | — | `YOUR_TELETHON_STRING_SESSION` |
+| `port` | Main application listener port. | `false` | `8000` | `8000` |
+| `debug_enabled` | Enable the separate debug dashboard. | `false` | `true` | `false` |
+| `debug_port` | Dashboard port; must differ from `port` when enabled. | `false` | `8001` | `8001` |
+| `debug_host` | Dashboard bind address. Keep the default for Docker port forwarding. | `false` | `0.0.0.0` | `0.0.0.0` |
+| `cache_mb` | Disk chunk-cache limit in MiB; `0` disables new cache writes. | `false` | `512` | `1024` |
+| `CHANNEL_IDS` | Comma-separated negative IDs limiting which joined private broadcast channels are indexed. Blank selects all eligible channels. | `false` | Empty | `-1001234567890,-1009876543210` |
+| `data_dir` | Persistent index and cache directory. Home Assistant manages this automatically; it is not a UI option. | `false` | `/data` standalone; `/data/stremio` in Home Assistant | `/data` |
+| `APP_VERSION` | Advanced: manifest version, normally supplied by the image build. Invalid or unset values fall back to `0.0.0-dev`. | `false` | Image-defined | `1.2.1` |
+
+Use the variable names shown above. The application also accepts uppercase equivalents for lowercase settings, with nonempty lowercase values taking precedence. `CHANNEL_IDS` takes precedence over its lowercase alias. The supplied Compose port mappings use lowercase `port` and `debug_port`.
+
+### 🎯 Selecting channels
+
+Leave `CHANNEL_IDS` empty to discover all joined private broadcast channels, including archived dialogs. To limit indexing, copy the full negative channel IDs from the protected status endpoint into `CHANNEL_IDS`, then restart.
+
+Selecting a channel does not join it. Public channels and groups are excluded. Removing a channel from the selection removes its indexed entries when discovery runs; selecting it again starts a fresh history scan.
+
+## 🔑 Prepare your credentials
+
+Complete this once before either installation method.
+
+### 1. Get Telegram application credentials
+
+Sign in at [my.telegram.org](https://my.telegram.org), open **API development tools**, and obtain your **API ID** and **API hash**.
+
+### 2. Download the project
+
+On a trusted computer with Git and Python 3.12:
 
 ```sh
-curl -X PUT "https://telegram.example.com/YOUR_API_KEY/mapping/tg:-1001234567890:123" \
-  -H 'Content-Type: application/json' \
-  --data '{"imdb":"tt0133093"}'
+git clone https://github.com/hilayc/stremio-addon.git
+cd stremio-addon
+python -m venv .venv
 ```
 
-An episode mapping uses the **show's** IMDb ID; the upload must also have a
-parseable season/episode. To change a mapping, PUT a replacement. Mappings
-persist across reindexing. If a caption includes multiple IMDb IDs, the first
-is used; use a manual correction when needed.
+Activate the virtual environment:
 
-## Playback and indexing behavior
+| Platform | Command |
+| --- | --- |
+| Linux / macOS | `source .venv/bin/activate` |
+| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
 
-- Signed, file-scoped playback and thumbnail URLs expire after 24 hours. Reopen
-  the source in Stremio to obtain a fresh URL. Rotating `api_key` invalidates them.
-- GET/HEAD, full responses, single closed/open/suffix byte ranges, 206 and 416
-  are supported. Multiple ranges are rejected with 416.
-- Telegram reads are aligned to 512 KiB; exact requested bytes are sliced from
-  bounded chunks. Four chunk reads may run concurrently. A disk LRU cache is
-  bounded by `cache_mb`; cancellation closes download iterators. Expired file
-  references are refreshed, and document IDs prevent reuse after media changes.
-- No transcoding: codec/container support depends on the Stremio device.
-  Every video byte travels through your server. Browser playback may require
-  Stremio's streaming service; native clients are the intended first target.
-- New/edited/deleted message events update the index. History advances in
-  persisted batches; catch-up handles posts since the last scan. Discovery runs
-  every five minutes. A rotating 100-message reconciliation checks old edits and
-  deletions, so large libraries take multiple cycles to reconcile completely.
-- Channel access loss removes indexed entries when detected; playback rechecks
-  the original message before serving cached bytes. Revoked sessions appear in
-  status and need a replacement plus container restart. Flood waits are respected.
-- `/healthz` only reports that HTTP is running. Use the protected status endpoint
-  for actual Telegram readiness. Initial session authorization failure stops startup.
-
-## Security and deployment
-
-The installation URL is a bearer credential granting access to private catalog
-metadata and playback. Keep it private. The session gives access to your Telegram
-account and stays on the server. API docs and application access logs are disabled;
-private responses use `Cache-Control: private, no-store`. Protect your proxy logs,
-`.env`, `/data`, and backups. Local cached chunks are ordinary unencrypted media
-files. Use encrypted host storage if required; deleting a post removes its index
-entry but its cached bytes remain until eviction or manual cache cleanup.
-
-For a URL prefix such as `https://example.com/telegram`, configure the reverse
-proxy to strip `/telegram` before forwarding. TLS terminates at the proxy.
-No Telegram bot, channel invitations, posting, or account modifications are used.
-
-## Tests and live acceptance
+Install dependencies and generate the session:
 
 ```sh
-pip install -r requirements-dev.txt
-python -m pytest -q
+pip install -r requirements.txt
+python generate_session.py
 ```
 
-The automated suite uses a simulated Telegram backend: Hebrew normalization,
-FTS updates/deletes, authentication, signed token scope/expiry, metadata matching,
-HTTP ranges/HEAD, aligned downloads, and bounded cache behavior. It requires no
-Telegram account. See `TESTING.md` for the live acceptance checklist.
+Enter your API credentials, phone number, Telegram login code, and two-step verification password if requested. Save the generated value as `user_session_string`.
 
-## Protocol references
+### 3. Generate an addon access key
 
-- [Stremio HTTP protocol](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md)
-- [Telethon client and download API](https://docs.telethon.dev/en/stable/modules/client.html)
-- [Wikidata query service](https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service)
+```sh
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Save the output as `api_key`.
+
+> 🔐 Keep the session string, API key, and installation URL private. Use a dedicated session for this addon and run only one instance with that session.
+
+## 🐳 Install with Docker Compose
+
+**You need:** Docker Engine with Docker Compose, the project checkout, and the credentials prepared above.
+
+### 1. Configure the environment
+
+From the repository root, copy the example:
+
+```sh
+cp .env.example .env
+```
+
+On Windows PowerShell, use `Copy-Item .env.example .env`.
+
+Edit `.env` and replace the placeholders:
+
+```dotenv
+port=8000
+addon_url=https://telegram.example.com
+api_key=REPLACE_WITH_YOUR_GENERATED_ACCESS_KEY
+api_id=123456
+api_hash=YOUR_TELEGRAM_API_HASH
+user_session_string=YOUR_TELETHON_STRING_SESSION
+
+debug_enabled=true
+debug_port=8001
+debug_host=0.0.0.0
+cache_mb=512
+# CHANNEL_IDS=-1001234567890,-1009876543210
+```
+
+### 2. Build and start
+
+The included `compose.yaml` is ready to use:
+
+```yaml
+services:
+  addon:
+    build: .
+    env_file: .env
+    ports:
+      - "127.0.0.1:${port:-8000}:${port:-8000}"
+      - "127.0.0.1:${debug_port:-8001}:${debug_port:-8001}"
+    volumes:
+      - telegram-data:/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  telegram-data:
+```
+
+```sh
+docker compose up --build -d
+docker compose logs -f addon
+```
+
+The named volume preserves the index and cache across container restarts and rebuilds.
+
+### 3. Configure HTTPS
+
+The supplied Compose configuration publishes both ports on the Docker host's loopback interface. Point a reverse proxy running on that host at `127.0.0.1:8000`.
+
+For example, with Caddy installed on the host:
+
+```caddyfile
+telegram.example.com {
+    reverse_proxy 127.0.0.1:8000
+}
+```
+
+Point the domain's DNS to your server and make ports 80 and 443 reachable by Caddy. Set `addon_url` to the matching HTTPS base URL.
+
+Preserve Range headers, allow long streaming requests, and disable proxy caching and response buffering. Avoid access logs containing the full credential-bearing URL. If using a URL prefix, strip that prefix before forwarding to the application.
+
+If the proxy runs in another container, connect both services to a shared Docker network and forward to `addon:8000`.
+
+### 4. Connect Stremio
+
+Paste this address into Stremio's addon installation field, replacing the domain and key:
+
+```text
+https://telegram.example.com/YOUR_API_KEY/manifest.json
+```
+
+Initial indexing runs in the background, so results fill in as the scan progresses.
+
+### 🔄 Update a Compose installation
+
+From the repository directory:
+
+```sh
+git pull --ff-only
+docker compose up --build -d
+```
+
+## 🏠 Install with Home Assistant
+
+**You need:** a Home Assistant installation with the add-on store and an **amd64 / x86-64** host. The current Home Assistant package does not declare ARM support.
+
+### 1. Add the custom repository
+
+Open **Settings → Add-ons → Add-on Store**, then open the **⋮** menu and choose **Repositories**.
+
+Paste this URL and select **Add**:
+
+```text
+https://github.com/hilayc/stremio-addon
+```
+
+You can also use this shortcut:
+
+[![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fhilayc%2Fstremio-addon)
+
+### 2. Install the add-on
+
+Find **Stremio Telegram** in the add-on store and select **Install**. Refresh the store if it has not appeared yet.
+
+### 3. Configure it
+
+Open the add-on's **Configuration** tab. Enter the credentials from [Prepare your credentials](#-prepare-your-credentials), along with your external URL.
+
+Example YAML configuration:
+
+```yaml
+port: 8000
+addon_url: "https://telegram.example.com"
+api_key: "REPLACE_WITH_YOUR_GENERATED_ACCESS_KEY"
+api_id: 123456
+api_hash: "YOUR_TELEGRAM_API_HASH"
+user_session_string: "YOUR_TELETHON_STRING_SESSION"
+debug_enabled: true
+debug_port: 8001
+debug_host: "0.0.0.0"
+cache_mb: 512
+CHANNEL_IDS: ""
+```
+
+Save the configuration. Enable **Start on boot**, start the add-on, and check its **Log** tab.
+
+Home Assistant stores application data in `/data/stremio`. Restart the add-on after changing configuration.
+
+### 4. Configure the connection
+
+The add-on uses **host networking**. Choose unused ports, and point your HTTPS reverse proxy at:
+
+```text
+http://HOME_ASSISTANT_IP:8000
+```
+
+Use the proxy settings described in the Docker section. The Stremio endpoint must be reachable by your client; Home Assistant ingress is not used.
+
+Install the addon in Stremio with:
+
+```text
+https://telegram.example.com/YOUR_API_KEY/manifest.json
+```
+
+### 5. Open the dashboard
+
+With `debug_enabled: true`, select **Open Web UI** on the add-on page and sign in with your `api_key`.
+
+The button currently targets port **8001**. If you change `debug_port`, open `http://HOME_ASSISTANT_IP:YOUR_DEBUG_PORT` directly.
+
+## 🧰 Debug dashboard
+
+The dashboard runs on its own listener and works independently of `addon_url`.
+
+| Installation | Default dashboard address |
+| --- | --- |
+| Docker Compose, opened on the Docker host | `http://127.0.0.1:8001` |
+| Home Assistant | `http://HOME_ASSISTANT_IP:8001` |
+
+For a remote Docker host, use an SSH tunnel to reach the loopback-bound dashboard:
+
+```sh
+ssh -L 8001:127.0.0.1:8001 user@YOUR_DOCKER_HOST
+```
+
+Then open `http://127.0.0.1:8001` locally.
+
+- **🔌 Connection:** inspect Telegram connection and indexing state.
+- **📋 Channels:** see which channels are included in queries.
+- **🔎 Search:** inspect matching results and diagnostic details without playback.
+- **👁️ Credentials:** reveal or hide the API key while entering it.
+- **🔄 Sync now:** trigger channel discovery and catch-up indexing after joining a channel or adding a video.
+- **📝 Activity:** review recent addon activity.
+
+For connection and indexing details, use the protected endpoint:
+
+```text
+https://telegram.example.com/YOUR_API_KEY/status
+```
+
+The `/healthz` endpoint checks that the HTTP server is running; it does not confirm Telegram readiness.
