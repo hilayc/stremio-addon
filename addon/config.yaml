@@ -1,7 +1,7 @@
 name: Stremio Telegram
 version: "1.2.3"
 slug: stremio_telegram
-description: Private Telegram video sources for Stremio with Hebrew search
+description: Stream your Telegram private videos
 url: https://github.com/hilayc/stremio-addon
 image: ghcr.io/hilayc/stremio-addon
 webui: "http://[HOST]:[PORT:8001]/"
